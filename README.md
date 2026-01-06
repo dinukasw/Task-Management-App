@@ -36,15 +36,17 @@ The application follows modern web development best practices with server-side r
 Before you begin, ensure you have the following installed:
 
 -   **Node.js** (v18 or higher recommended)
--   **PostgreSQL** (v12 or higher)
 -   **npm**, **yarn**, or **pnpm** package manager
+-   **PostgreSQL Database** (choose one):
+    -   **Option 1**: Local PostgreSQL (v12 or higher) - Install PostgreSQL locally
+    -   **Option 2**: Neon Database (Recommended) - Cloud-hosted PostgreSQL at [neon.tech](https://neon.tech)
 
 You can verify your installations:
 
 ```bash
 node --version
 npm --version
-psql --version
+psql --version  # Only needed if using local PostgreSQL
 ```
 
 ## Local Development Setup
@@ -92,7 +94,9 @@ JWT_SECRET="your-super-secret-jwt-key-change-in-production"
 
 ### 4. Set Up the Database
 
-#### Create PostgreSQL Database
+You can use either a local PostgreSQL database or a Neon cloud database. Choose one of the options below:
+
+#### Option A: Create Local PostgreSQL Database
 
 ```bash
 # Connect to PostgreSQL
@@ -105,7 +109,51 @@ CREATE DATABASE task_management;
 \q
 ```
 
+Then update your `.env.local` file with the local connection string:
+
+```env
+DATABASE_URL="postgresql://username:password@localhost:5432/task_management?schema=public"
+```
+
+#### Option B: Connect with Neon Database (Recommended for Cloud)
+
+[Neon](https://neon.tech) is a serverless PostgreSQL platform that's perfect for development and production.
+
+**Step 1: Create a Neon Account**
+
+1. Visit [https://neon.tech](https://neon.tech)
+2. Sign up for a free account (no credit card required)
+3. Create a new project
+
+**Step 2: Get Your Connection String**
+
+1. In your Neon dashboard, navigate to your project
+2. Click on the "Connection Details" or "Connection String" section
+3. Copy the connection string (it will look like this):
+    ```
+    postgresql://username:password@ep-xxx-xxx.region.aws.neon.tech/dbname?sslmode=require
+    ```
+
+**Step 3: Update Environment Variables**
+
+Add the Neon connection string to your `.env.local` file:
+
+```env
+DATABASE_URL="postgresql://username:password@ep-xxx-xxx.region.aws.neon.tech/dbname?sslmode=require"
+JWT_SECRET="your-super-secret-jwt-key-change-in-production"
+```
+
+**Step 4: Test Connection (Optional)**
+
+You can test your connection using Prisma:
+
+```bash
+npx prisma db pull
+```
+
 #### Run Database Migrations
+
+After setting up your database (local or Neon), run the migrations:
 
 ```bash
 # Generate Prisma Client
@@ -117,6 +165,8 @@ npx prisma migrate dev --name init
 # (Optional) Seed the database if seed script exists
 npx prisma db seed
 ```
+
+**Note:** For Neon databases, make sure your connection string includes `?sslmode=require` at the end for secure connections.
 
 ### 5. Start the Development Server
 
@@ -146,6 +196,9 @@ npm start
 ### Environment Variable Details
 
 -   **DATABASE_URL**: Full PostgreSQL connection string including username, password, host, port, database name, and schema
+    -   **Local PostgreSQL**: `postgresql://username:password@localhost:5432/task_management?schema=public`
+    -   **Neon Database**: `postgresql://username:password@ep-xxx-xxx.region.aws.neon.tech/dbname?sslmode=require`
+    -   For Neon, the connection string is provided in your Neon dashboard under "Connection Details"
 -   **JWT_SECRET**: Used to sign and verify JWT tokens for authentication. Should be a long, random string in production
 
 ## Functional Features
