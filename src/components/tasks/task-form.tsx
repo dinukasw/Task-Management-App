@@ -234,24 +234,35 @@ export function TaskForm({ task, onSuccess }: TaskFormProps) {
                     <FormField
                         control={form.control}
                         name="status"
-                        render={({ field }) => (
-                            <FormItem className="mb-4">
-                                <FormLabel>Status</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value}>
-                                    <FormControl>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select status" />
-                                        </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                        <SelectItem value="PENDING">PENDING</SelectItem>
-                                        <SelectItem value="COMPLETED">COMPLETED</SelectItem>
-                                        <SelectItem value="CANCELED">CANCELED</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <FormMessage />
-                            </FormItem>
-                        )}
+                        render={({ field }) => {
+                            const isTerminalState = task && (task.status === "COMPLETED" || task.status === "CANCELED");
+                            const isPendingState = task && task.status === "PENDING";
+                            
+                            return (
+                                <FormItem className="mb-4">
+                                    <FormLabel>Status</FormLabel>
+                                    <Select 
+                                        onValueChange={field.onChange} 
+                                        value={field.value}
+                                        disabled={isTerminalState || isLoading}
+                                    >
+                                        <FormControl>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select status" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            {!isPendingState && (
+                                                <SelectItem value="PENDING">PENDING</SelectItem>
+                                            )}
+                                            <SelectItem value="COMPLETED">COMPLETED</SelectItem>
+                                            <SelectItem value="CANCELED">CANCELED</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                </FormItem>
+                            );
+                        }}
                     />
                     <div className="flex gap-2">
                         <Button type="submit" className="flex-1" disabled={isLoading}>

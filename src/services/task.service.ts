@@ -75,6 +75,21 @@ export async function updateTask(
     throw new Error("Task not found");
   }
 
+  // Validate status transition rules if status is being updated
+  if (data.status !== undefined && data.status !== existingTask.status) {
+    // Terminal states cannot be changed
+    if (existingTask.status === "COMPLETED" || existingTask.status === "CANCELED") {
+      throw new Error("Cannot change status of completed or canceled task");
+    }
+
+    // PENDING tasks can only transition to COMPLETED or CANCELED
+    if (existingTask.status === "PENDING") {
+      if (data.status !== "COMPLETED" && data.status !== "CANCELED") {
+        throw new Error("Pending tasks can only be changed to completed or canceled");
+      }
+    }
+  }
+
   // Update the task
   const task = await prisma.task.update({
     where: {

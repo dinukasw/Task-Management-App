@@ -126,6 +126,17 @@ export async function PUT(
         );
       }
 
+      // Status transition validation errors
+      if (
+        error.message === "Cannot change status of completed or canceled task" ||
+        error.message === "Pending tasks can only be changed to completed or canceled"
+      ) {
+        return NextResponse.json(
+          { success: false, error: error.message },
+          { status: 400 }
+        );
+      }
+
       return NextResponse.json(
         { success: false, error: error.message || "Failed to update task" },
         { status: 500 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MoreHorizontal, Calendar, Loader2, Pencil, Trash2, ChevronDown } from "lucide-react";
 import {
@@ -123,9 +123,12 @@ interface TaskTableProps {
   sortOption: string;
   onSortChange: (option: string) => void;
   statusFilter: string;
+  currentPage: number;
+  itemsPerPage: number;
+  onTotalItemsChange: (total: number) => void;
 }
 
-export function TaskTable({ searchQuery, sortOption, onSortChange, statusFilter }: TaskTableProps) {
+export function TaskTable({ searchQuery, sortOption, onSortChange, statusFilter, currentPage, itemsPerPage, onTotalItemsChange }: TaskTableProps) {
   const queryClient = useQueryClient();
   const [editSheetOpen, setEditSheetOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -193,6 +196,17 @@ export function TaskTable({ searchQuery, sortOption, onSortChange, statusFilter 
 
     return sorted;
   }, [tasks, searchQuery, sortOption, statusFilter]);
+
+  // Calculate pagination metadata
+  const totalCount = filteredAndSortedTasks.length;
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, totalCount);
+  const paginatedTasks = filteredAndSortedTasks.slice(startIndex, endIndex);
+
+  // Notify parent of total items change
+  useEffect(() => {
+    onTotalItemsChange(totalCount);
+  }, [totalCount, onTotalItemsChange]);
 
   // Update task status mutation
   const updateStatusMutation = useMutation({
@@ -439,7 +453,7 @@ export function TaskTable({ searchQuery, sortOption, onSortChange, statusFilter 
           </TableRow>
         </TableHeader>
         <TableBody>
-          {filteredAndSortedTasks.map((task) => (
+          {paginatedTasks.map((task) => (
             <TableRow
               key={task.id}
               className="group transition-colors border-b border-border/50 last:border-b-0"
@@ -487,19 +501,32 @@ export function TaskTable({ searchQuery, sortOption, onSortChange, statusFilter 
                       <DropdownMenuSubContent>
                         <DropdownMenuItem
                           onClick={() => handleStatusChange(task.id, "PENDING")}
-                          disabled={task.status === "PENDING" || updateStatusMutation.isPending}
+                          disabled={
+                            task.status === "PENDING" ||
+                            task.status === "COMPLETED" ||
+                            task.status === "CANCELED" ||
+                            updateStatusMutation.isPending
+                          }
                         >
                           PENDING
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => handleStatusChange(task.id, "COMPLETED")}
-                          disabled={task.status === "COMPLETED" || updateStatusMutation.isPending}
+                          disabled={
+                            task.status === "COMPLETED" ||
+                            task.status === "CANCELED" ||
+                            updateStatusMutation.isPending
+                          }
                         >
                           COMPLETED
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => handleStatusChange(task.id, "CANCELED")}
-                          disabled={task.status === "CANCELED" || updateStatusMutation.isPending}
+                          disabled={
+                            task.status === "CANCELED" ||
+                            task.status === "COMPLETED" ||
+                            updateStatusMutation.isPending
+                          }
                         >
                           CANCELED
                         </DropdownMenuItem>
