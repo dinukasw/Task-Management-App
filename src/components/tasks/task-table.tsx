@@ -62,45 +62,100 @@ interface TaskUpdateResponse {
 
 // Fetch tasks from API
 async function fetchTasks(): Promise<Task[]> {
-  const response = await fetch("/api/tasks");
-  const data: TaskResponse = await response.json();
+  try {
+    const response = await fetch("/api/tasks");
 
-  if (!response.ok || !data.success) {
-    throw new Error(data.error || "Failed to fetch tasks");
+    // Handle network errors
+    if (!response.ok) {
+      // Try to parse error response
+      try {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to fetch tasks (${response.status})`);
+      } catch {
+        // If JSON parsing fails, throw network error
+        throw new Error(`Network error: ${response.statusText || "Unable to connect to server"}`);
+      }
+    }
+
+    const data: TaskResponse = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || "Failed to fetch tasks");
+    }
+
+    return data.data;
+  } catch (error) {
+    // Re-throw with enhanced error message
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error("An unexpected error occurred while fetching tasks");
   }
-
-  return data.data;
 }
 
 // Update task status
 async function updateTaskStatus(taskId: string, status: "PENDING" | "COMPLETED" | "CANCELED"): Promise<Task> {
-  const response = await fetch(`/api/tasks/${taskId}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ status }),
-  });
+  try {
+    const response = await fetch(`/api/tasks/${taskId}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ status }),
+    });
 
-  const data: TaskUpdateResponse = await response.json();
+    // Handle network errors
+    if (!response.ok) {
+      try {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to update task status (${response.status})`);
+      } catch {
+        throw new Error(`Network error: ${response.statusText || "Unable to connect to server"}`);
+      }
+    }
 
-  if (!response.ok || !data.success) {
-    throw new Error(data.error || "Failed to update task status");
+    const data: TaskUpdateResponse = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || "Failed to update task status");
+    }
+
+    return data.data;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error("An unexpected error occurred while updating task status");
   }
-
-  return data.data;
 }
 
 // Delete task API call
 async function deleteTask(taskId: string): Promise<void> {
-  const response = await fetch(`/api/tasks/${taskId}`, {
-    method: "DELETE",
-  });
+  try {
+    const response = await fetch(`/api/tasks/${taskId}`, {
+      method: "DELETE",
+    });
 
-  const result = await response.json();
+    // Handle network errors
+    if (!response.ok) {
+      try {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to delete task (${response.status})`);
+      } catch {
+        throw new Error(`Network error: ${response.statusText || "Unable to connect to server"}`);
+      }
+    }
 
-  if (!response.ok || !result.success) {
-    throw new Error(result.error || "Failed to delete task");
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(result.error || "Failed to delete task");
+    }
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error("An unexpected error occurred while deleting task");
   }
 }
 
@@ -139,6 +194,9 @@ export function TaskTable({ searchQuery, sortOption, onSortChange, statusFilter,
   const { data: tasks, isLoading, error } = useQuery({
     queryKey: ["tasks"],
     queryFn: fetchTasks,
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to load tasks. Please try again.");
+    },
   });
 
   // Filter and sort tasks
@@ -212,12 +270,22 @@ export function TaskTable({ searchQuery, sortOption, onSortChange, statusFilter,
   const updateStatusMutation = useMutation({
     mutationFn: ({ taskId, status }: { taskId: string; status: "PENDING" | "COMPLETED" | "CANCELED" }) =>
       updateTaskStatus(taskId, status),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      toast.success("Task status updated successfully");
+      const statusText = variables.status.charAt(0) + variables.status.slice(1).toLowerCase();
+      toast.success(`Task marked as ${statusText} successfully`);
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Failed to update task status");
+      // Provide more specific error messages
+      if (error.message.includes("Network error")) {
+        toast.error("Unable to connect to server. Please check your internet connection.");
+      } else if (error.message.includes("Cannot change status")) {
+        toast.error(error.message);
+      } else if (error.message.includes("Invalid or expired token")) {
+        toast.error("Your session has expired. Please log in again.");
+      } else {
+        toast.error(error.message || "Failed to update task status. Please try again.");
+      }
     },
   });
 
@@ -231,7 +299,16 @@ export function TaskTable({ searchQuery, sortOption, onSortChange, statusFilter,
       setTaskToDelete(null);
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Failed to delete task");
+      // Provide more specific error messages
+      if (error.message.includes("Network error")) {
+        toast.error("Unable to connect to server. Please check your internet connection.");
+      } else if (error.message.includes("Task not found")) {
+        toast.error("Task not found. It may have already been deleted.");
+      } else if (error.message.includes("Invalid or expired token")) {
+        toast.error("Your session has expired. Please log in again.");
+      } else {
+        toast.error(error.message || "Failed to delete task. Please try again.");
+      }
     },
   });
 

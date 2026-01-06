@@ -3,6 +3,7 @@
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/context/auth-context";
 import QueryProvider from "./query-provider";
+import { Toaster } from "@/components/ui/sonner";
 
 export default function RootProvider({ children }: { children: React.ReactNode }) {
   return (
@@ -15,6 +16,7 @@ export default function RootProvider({ children }: { children: React.ReactNode }
       >
         <AuthProvider>
           {children}
+          <Toaster />
         </AuthProvider>
       </ThemeProvider>
     </QueryProvider>

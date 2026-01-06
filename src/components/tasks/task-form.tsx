@@ -61,52 +61,103 @@ interface TaskResponse {
 
 // Create task API call
 async function createTask(data: TaskInput): Promise<Task> {
-    const response = await fetch("/api/tasks", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-    });
+    try {
+        const response = await fetch("/api/tasks", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(data),
+        });
 
-    const result: TaskResponse = await response.json();
+        // Handle network errors
+        if (!response.ok) {
+            try {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `Failed to create task (${response.status})`);
+            } catch {
+                throw new Error(`Network error: ${response.statusText || "Unable to connect to server"}`);
+            }
+        }
 
-    if (!response.ok || !result.success) {
-        throw new Error(result.error || "Failed to create task");
+        const result: TaskResponse = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.error || "Failed to create task");
+        }
+
+        return result.data;
+    } catch (error) {
+        if (error instanceof Error) {
+            throw error;
+        }
+        throw new Error("An unexpected error occurred while creating task");
     }
-
-    return result.data;
 }
 
 // Update task API call
 async function updateTask(taskId: string, data: UpdateTaskInput): Promise<Task> {
-    const response = await fetch(`/api/tasks/${taskId}`, {
-        method: "PUT",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-    });
+    try {
+        const response = await fetch(`/api/tasks/${taskId}`, {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(data),
+        });
 
-    const result: TaskResponse = await response.json();
+        // Handle network errors
+        if (!response.ok) {
+            try {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `Failed to update task (${response.status})`);
+            } catch {
+                throw new Error(`Network error: ${response.statusText || "Unable to connect to server"}`);
+            }
+        }
 
-    if (!response.ok || !result.success) {
-        throw new Error(result.error || "Failed to update task");
+        const result: TaskResponse = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.error || "Failed to update task");
+        }
+
+        return result.data;
+    } catch (error) {
+        if (error instanceof Error) {
+            throw error;
+        }
+        throw new Error("An unexpected error occurred while updating task");
     }
-
-    return result.data;
 }
 
 // Delete task API call
 async function deleteTask(taskId: string): Promise<void> {
-    const response = await fetch(`/api/tasks/${taskId}`, {
-        method: "DELETE",
-    });
+    try {
+        const response = await fetch(`/api/tasks/${taskId}`, {
+            method: "DELETE",
+        });
 
-    const result = await response.json();
+        // Handle network errors
+        if (!response.ok) {
+            try {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `Failed to delete task (${response.status})`);
+            } catch {
+                throw new Error(`Network error: ${response.statusText || "Unable to connect to server"}`);
+            }
+        }
 
-    if (!response.ok || !result.success) {
-        throw new Error(result.error || "Failed to delete task");
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.error || "Failed to delete task");
+        }
+    } catch (error) {
+        if (error instanceof Error) {
+            throw error;
+        }
+        throw new Error("An unexpected error occurred while deleting task");
     }
 }
 
@@ -146,7 +197,16 @@ export function TaskForm({ task, onSuccess }: TaskFormProps) {
             onSuccess();
         },
         onError: (error: Error) => {
-            toast.error(error.message || "Failed to create task");
+            // Provide more specific error messages
+            if (error.message.includes("Network error")) {
+                toast.error("Unable to connect to server. Please check your internet connection.");
+            } else if (error.message.includes("Invalid input data")) {
+                toast.error("Please check your input and try again.");
+            } else if (error.message.includes("Invalid or expired token")) {
+                toast.error("Your session has expired. Please log in again.");
+            } else {
+                toast.error(error.message || "Failed to create task. Please try again.");
+            }
         },
     });
 
@@ -160,7 +220,20 @@ export function TaskForm({ task, onSuccess }: TaskFormProps) {
             onSuccess();
         },
         onError: (error: Error) => {
-            toast.error(error.message || "Failed to update task");
+            // Provide more specific error messages
+            if (error.message.includes("Network error")) {
+                toast.error("Unable to connect to server. Please check your internet connection.");
+            } else if (error.message.includes("Invalid input data")) {
+                toast.error("Please check your input and try again.");
+            } else if (error.message.includes("Cannot change status")) {
+                toast.error(error.message);
+            } else if (error.message.includes("Task not found")) {
+                toast.error("Task not found. It may have been deleted.");
+            } else if (error.message.includes("Invalid or expired token")) {
+                toast.error("Your session has expired. Please log in again.");
+            } else {
+                toast.error(error.message || "Failed to update task. Please try again.");
+            }
         },
     });
 
@@ -174,7 +247,16 @@ export function TaskForm({ task, onSuccess }: TaskFormProps) {
             onSuccess();
         },
         onError: (error: Error) => {
-            toast.error(error.message || "Failed to delete task");
+            // Provide more specific error messages
+            if (error.message.includes("Network error")) {
+                toast.error("Unable to connect to server. Please check your internet connection.");
+            } else if (error.message.includes("Task not found")) {
+                toast.error("Task not found. It may have already been deleted.");
+            } else if (error.message.includes("Invalid or expired token")) {
+                toast.error("Your session has expired. Please log in again.");
+            } else {
+                toast.error(error.message || "Failed to delete task. Please try again.");
+            }
         },
     });
 
