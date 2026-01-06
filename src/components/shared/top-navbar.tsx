@@ -15,6 +15,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/context/auth-context";
 import { toast } from "sonner";
 import { LogOut } from "lucide-react";
+import { usePathname } from "next/navigation";
+import Link from "next/link";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 
 function getInitials(name: string | null | undefined, email: string): string {
   if (name) {
@@ -29,11 +39,32 @@ function getInitials(name: string | null | undefined, email: string): string {
 
 export function TopNavbar() {
   const { user, isLoading, logout } = useAuth();
+  const pathname = usePathname();
 
   const handleLogout = async () => {
     await logout();
     toast.success("Logged out successfully");
   };
+
+  // Generate breadcrumb items based on pathname
+  const getBreadcrumbItems = () => {
+    const items = [];
+    
+    // Always start with Dashboard
+    items.push({ label: "Dashboard", href: "/" });
+    
+    // Add additional items based on pathname
+    if (pathname === "/tasks") {
+      items.push({ label: "Tasks", href: "/tasks" });
+    } else if (pathname.startsWith("/tasks/")) {
+      items.push({ label: "Tasks", href: "/tasks" });
+      // Could add task name here if needed
+    }
+    
+    return items;
+  };
+
+  const breadcrumbItems = getBreadcrumbItems();
 
   if (isLoading) {
     return (
@@ -61,7 +92,27 @@ export function TopNavbar() {
         {/* The Toggle Icon for the Collapsible Sidebar */}
         <SidebarTrigger className="hover:bg-accent" />
         <div className="h-4 w-1px bg-border" />
-        <h2 className="text-sm font-medium text-muted-foreground">Dashboard</h2>
+        <Breadcrumb>
+          <BreadcrumbList>
+            {breadcrumbItems.map((item, index) => {
+              const isLast = index === breadcrumbItems.length - 1;
+              return (
+                <div key={item.href} className="flex items-center">
+                  {index > 0 && <BreadcrumbSeparator />}
+                  <BreadcrumbItem>
+                    {isLast ? (
+                      <BreadcrumbPage>{item.label}</BreadcrumbPage>
+                    ) : (
+                      <BreadcrumbLink asChild>
+                        <Link href={item.href}>{item.label}</Link>
+                      </BreadcrumbLink>
+                    )}
+                  </BreadcrumbItem>
+                </div>
+              );
+            })}
+          </BreadcrumbList>
+        </Breadcrumb>
       </div>
 
       <div className="flex items-center gap-4">
