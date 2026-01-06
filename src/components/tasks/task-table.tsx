@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MoreHorizontal, Calendar, Loader2, Pencil, Trash2, ChevronDown } from "lucide-react";
 import {
@@ -51,6 +51,12 @@ interface Task {
 interface TaskResponse {
   success: boolean;
   data: Task[];
+  pagination?: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
   error?: string;
 }
 
@@ -60,10 +66,32 @@ interface TaskUpdateResponse {
   error?: string;
 }
 
-// Fetch tasks from API
-async function fetchTasks(): Promise<Task[]> {
+interface FetchTasksParams {
+  page?: number;
+  limit?: number;
+  status?: string;
+  search?: string;
+  sortBy?: string;
+  sortOrder?: string;
+}
+
+// Fetch tasks from API with server-side filtering, sorting, and pagination
+async function fetchTasks(params: FetchTasksParams = {}): Promise<{ tasks: Task[]; pagination: { total: number; page: number; limit: number; totalPages: number } }> {
   try {
-    const response = await fetch("/api/tasks");
+    const { page = 1, limit = 10, status, search, sortBy, sortOrder } = params;
+    
+    // Build query string
+    const queryParams = new URLSearchParams();
+    queryParams.set("page", page.toString());
+    queryParams.set("limit", limit.toString());
+    if (status && status !== "all") queryParams.set("status", status);
+    if (search) queryParams.set("search", search);
+    if (sortBy) {
+      queryParams.set("sortBy", sortBy);
+      queryParams.set("sortOrder", sortOrder || "desc");
+    }
+
+    const response = await fetch(`/api/tasks?${queryParams.toString()}`);
 
     // Handle network errors
     if (!response.ok) {
@@ -83,7 +111,10 @@ async function fetchTasks(): Promise<Task[]> {
       throw new Error(data.error || "Failed to fetch tasks");
     }
 
-    return data.data;
+    return {
+      tasks: data.data,
+      pagination: data.pagination || { total: data.data.length, page: 1, limit: data.data.length, totalPages: 1 },
+    };
   } catch (error) {
     // Re-throw with enhanced error message
     if (error instanceof Error) {
@@ -190,92 +221,83 @@ export function TaskTable({ searchQuery, sortOption, onSortChange, statusFilter,
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
 
-  // Fetch tasks
-  const { data: tasks, isLoading, error } = useQuery({
-    queryKey: ["tasks"],
-    queryFn: fetchTasks,
+  // Map sortOption to API parameters
+  const getSortParams = () => {
+    switch (sortOption) {
+      case "date-newest":
+        return { sortBy: "createdAt", sortOrder: "desc" };
+      case "date-oldest":
+        return { sortBy: "createdAt", sortOrder: "asc" };
+      case "status-asc":
+        return { sortBy: "status", sortOrder: "asc" };
+      case "status-desc":
+        return { sortBy: "status", sortOrder: "desc" };
+      default:
+        return { sortBy: "createdAt", sortOrder: "desc" };
+    }
+  };
+
+  const sortParams = getSortParams();
+
+  // Fetch tasks with server-side filtering, sorting, and pagination
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["tasks", currentPage, itemsPerPage, statusFilter, searchQuery, sortOption],
+    queryFn: () => fetchTasks({
+      page: currentPage,
+      limit: itemsPerPage,
+      status: statusFilter !== "all" ? statusFilter : undefined,
+      search: searchQuery.trim() || undefined,
+      ...sortParams,
+    }),
     onError: (error: Error) => {
       toast.error(error.message || "Failed to load tasks. Please try again.");
     },
   });
 
-  // Filter and sort tasks
-  const filteredAndSortedTasks = useMemo(() => {
-    if (!tasks) return [];
-
-    // Filter by search query (title only)
-    let filtered = tasks;
-    if (searchQuery.trim()) {
-      filtered = tasks.filter((task) =>
-        task.title.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-
-    // Filter by status
-    if (statusFilter !== "all") {
-      filtered = filtered.filter((task) => task.status === statusFilter);
-    }
-
-    // Sort tasks
-    const sorted = [...filtered].sort((a, b) => {
-      switch (sortOption) {
-        case "date-newest":
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-        case "date-oldest":
-          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-        case "status-asc": {
-          const statusOrder: Record<"PENDING" | "COMPLETED" | "CANCELED", number> = {
-            PENDING: 0,
-            COMPLETED: 1,
-            CANCELED: 2,
-          };
-          const statusDiff = statusOrder[a.status] - statusOrder[b.status];
-          // Secondary sort by date (newest first) when status is the same
-          return statusDiff !== 0
-            ? statusDiff
-            : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-        }
-        case "status-desc": {
-          const statusOrder: Record<"PENDING" | "COMPLETED" | "CANCELED", number> = {
-            PENDING: 2,
-            COMPLETED: 1,
-            CANCELED: 0,
-          };
-          const statusDiff = statusOrder[a.status] - statusOrder[b.status];
-          // Secondary sort by date (newest first) when status is the same
-          return statusDiff !== 0
-            ? statusDiff
-            : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-        }
-        default:
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      }
-    });
-
-    return sorted;
-  }, [tasks, searchQuery, sortOption, statusFilter]);
-
-  // Calculate pagination metadata
-  const totalCount = filteredAndSortedTasks.length;
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = Math.min(startIndex + itemsPerPage, totalCount);
-  const paginatedTasks = filteredAndSortedTasks.slice(startIndex, endIndex);
+  const tasks = data?.tasks || [];
+  const pagination = data?.pagination || { total: 0, page: 1, limit: itemsPerPage, totalPages: 1 };
 
   // Notify parent of total items change
   useEffect(() => {
-    onTotalItemsChange(totalCount);
-  }, [totalCount, onTotalItemsChange]);
+    onTotalItemsChange(pagination.total);
+  }, [pagination.total, onTotalItemsChange]);
 
-  // Update task status mutation
+  // Update task status mutation with optimistic updates
   const updateStatusMutation = useMutation({
     mutationFn: ({ taskId, status }: { taskId: string; status: "PENDING" | "COMPLETED" | "CANCELED" }) =>
       updateTaskStatus(taskId, status),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      const statusText = variables.status.charAt(0) + variables.status.slice(1).toLowerCase();
-      toast.success(`Task marked as ${statusText} successfully`);
+    onMutate: async ({ taskId, status }) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["tasks"] });
+
+      // Snapshot the previous value
+      const previousData = queryClient.getQueryData<{ tasks: Task[]; pagination: any }>(["tasks", currentPage, itemsPerPage, statusFilter, searchQuery, sortOption]);
+
+      // Optimistically update to the new value
+      if (previousData) {
+        queryClient.setQueryData<{ tasks: Task[]; pagination: any }>(
+          ["tasks", currentPage, itemsPerPage, statusFilter, searchQuery, sortOption],
+          {
+            ...previousData,
+            tasks: previousData.tasks.map((task) =>
+              task.id === taskId ? { ...task, status } : task
+            ),
+          }
+        );
+      }
+
+      // Return a context object with the snapshotted value
+      return { previousData };
     },
-    onError: (error: Error) => {
+    onError: (error: Error, _variables, context) => {
+      // Rollback to the previous value on error
+      if (context?.previousData) {
+        queryClient.setQueryData(
+          ["tasks", currentPage, itemsPerPage, statusFilter, searchQuery, sortOption],
+          context.previousData
+        );
+      }
+
       // Provide more specific error messages
       if (error.message.includes("Network error")) {
         toast.error("Unable to connect to server. Please check your internet connection.");
@@ -287,18 +309,53 @@ export function TaskTable({ searchQuery, sortOption, onSortChange, statusFilter,
         toast.error(error.message || "Failed to update task status. Please try again.");
       }
     },
+    onSuccess: (_, variables) => {
+      const statusText = variables.status.charAt(0) + variables.status.slice(1).toLowerCase();
+      toast.success(`Task marked as ${statusText} successfully`);
+    },
+    onSettled: () => {
+      // Refetch to ensure consistency
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    },
   });
 
-  // Delete task mutation
+  // Delete task mutation with optimistic updates
   const deleteMutation = useMutation({
     mutationFn: deleteTask,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      toast.success("Task deleted successfully");
-      setDeleteDialogOpen(false);
-      setTaskToDelete(null);
+    onMutate: async (taskId: string) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["tasks"] });
+
+      // Snapshot the previous value
+      const previousData = queryClient.getQueryData<{ tasks: Task[]; pagination: any }>(["tasks", currentPage, itemsPerPage, statusFilter, searchQuery, sortOption]);
+
+      // Optimistically remove the task
+      if (previousData) {
+        queryClient.setQueryData<{ tasks: Task[]; pagination: any }>(
+          ["tasks", currentPage, itemsPerPage, statusFilter, searchQuery, sortOption],
+          {
+            ...previousData,
+            tasks: previousData.tasks.filter((task) => task.id !== taskId),
+            pagination: {
+              ...previousData.pagination,
+              total: Math.max(0, previousData.pagination.total - 1),
+            },
+          }
+        );
+      }
+
+      // Return a context object with the snapshotted value
+      return { previousData };
     },
-    onError: (error: Error) => {
+    onError: (error: Error, _taskId, context) => {
+      // Rollback to the previous value on error
+      if (context?.previousData) {
+        queryClient.setQueryData(
+          ["tasks", currentPage, itemsPerPage, statusFilter, searchQuery, sortOption],
+          context.previousData
+        );
+      }
+
       // Provide more specific error messages
       if (error.message.includes("Network error")) {
         toast.error("Unable to connect to server. Please check your internet connection.");
@@ -309,6 +366,15 @@ export function TaskTable({ searchQuery, sortOption, onSortChange, statusFilter,
       } else {
         toast.error(error.message || "Failed to delete task. Please try again.");
       }
+    },
+    onSuccess: () => {
+      toast.success("Task deleted successfully");
+      setDeleteDialogOpen(false);
+      setTaskToDelete(null);
+    },
+    onSettled: () => {
+      // Refetch to ensure consistency
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
     },
   });
 
@@ -360,7 +426,7 @@ export function TaskTable({ searchQuery, sortOption, onSortChange, statusFilter,
     );
   }
 
-  if (!tasks || tasks.length === 0) {
+  if (!isLoading && (!tasks || tasks.length === 0)) {
     return (
       <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
         <Table>
@@ -420,7 +486,7 @@ export function TaskTable({ searchQuery, sortOption, onSortChange, statusFilter,
     );
   }
 
-  if (filteredAndSortedTasks.length === 0) {
+  if (!isLoading && tasks.length === 0 && (searchQuery.trim() || statusFilter !== "all")) {
     return (
       <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
         <Table>
@@ -530,7 +596,7 @@ export function TaskTable({ searchQuery, sortOption, onSortChange, statusFilter,
           </TableRow>
         </TableHeader>
         <TableBody>
-          {paginatedTasks.map((task) => (
+          {tasks.map((task) => (
             <TableRow
               key={task.id}
               className="group transition-colors border-b border-border/50 last:border-b-0"
