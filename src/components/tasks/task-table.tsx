@@ -1,7 +1,8 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { MoreHorizontal, Calendar, Loader2 } from "lucide-react";
+import { MoreHorizontal, Calendar, Loader2, Pencil, Trash2, ChevronDown } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow
 } from "@/components/ui/table";
@@ -18,8 +19,24 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { formatTaskDate } from "@/lib/date";
 import { toast } from "sonner";
+import { TaskForm } from "./task-form";
 // Task type matching API response (dates are serialized as strings)
 interface Task {
   id: string;
@@ -74,6 +91,19 @@ async function updateTaskStatus(taskId: string, status: "PENDING" | "COMPLETED" 
   return data.data;
 }
 
+// Delete task API call
+async function deleteTask(taskId: string): Promise<void> {
+  const response = await fetch(`/api/tasks/${taskId}`, {
+    method: "DELETE",
+  });
+
+  const result = await response.json();
+
+  if (!response.ok || !result.success) {
+    throw new Error(result.error || "Failed to delete task");
+  }
+}
+
 // Get status badge color classes
 function getStatusBadgeClasses(status: "PENDING" | "COMPLETED" | "CANCELED"): string {
   switch (status) {
@@ -88,14 +118,81 @@ function getStatusBadgeClasses(status: "PENDING" | "COMPLETED" | "CANCELED"): st
   }
 }
 
-export function TaskTable() {
+interface TaskTableProps {
+  searchQuery: string;
+  sortOption: string;
+  onSortChange: (option: string) => void;
+  statusFilter: string;
+}
+
+export function TaskTable({ searchQuery, sortOption, onSortChange, statusFilter }: TaskTableProps) {
   const queryClient = useQueryClient();
+  const [editSheetOpen, setEditSheetOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
 
   // Fetch tasks
   const { data: tasks, isLoading, error } = useQuery({
     queryKey: ["tasks"],
     queryFn: fetchTasks,
   });
+
+  // Filter and sort tasks
+  const filteredAndSortedTasks = useMemo(() => {
+    if (!tasks) return [];
+
+    // Filter by search query (title only)
+    let filtered = tasks;
+    if (searchQuery.trim()) {
+      filtered = tasks.filter((task) =>
+        task.title.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
+    // Filter by status
+    if (statusFilter !== "all") {
+      filtered = filtered.filter((task) => task.status === statusFilter);
+    }
+
+    // Sort tasks
+    const sorted = [...filtered].sort((a, b) => {
+      switch (sortOption) {
+        case "date-newest":
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        case "date-oldest":
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        case "status-asc": {
+          const statusOrder: Record<"PENDING" | "COMPLETED" | "CANCELED", number> = {
+            PENDING: 0,
+            COMPLETED: 1,
+            CANCELED: 2,
+          };
+          const statusDiff = statusOrder[a.status] - statusOrder[b.status];
+          // Secondary sort by date (newest first) when status is the same
+          return statusDiff !== 0
+            ? statusDiff
+            : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        }
+        case "status-desc": {
+          const statusOrder: Record<"PENDING" | "COMPLETED" | "CANCELED", number> = {
+            PENDING: 2,
+            COMPLETED: 1,
+            CANCELED: 0,
+          };
+          const statusDiff = statusOrder[a.status] - statusOrder[b.status];
+          // Secondary sort by date (newest first) when status is the same
+          return statusDiff !== 0
+            ? statusDiff
+            : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        }
+        default:
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+    });
+
+    return sorted;
+  }, [tasks, searchQuery, sortOption, statusFilter]);
 
   // Update task status mutation
   const updateStatusMutation = useMutation({
@@ -110,8 +207,43 @@ export function TaskTable() {
     },
   });
 
+  // Delete task mutation
+  const deleteMutation = useMutation({
+    mutationFn: deleteTask,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      toast.success("Task deleted successfully");
+      setDeleteDialogOpen(false);
+      setTaskToDelete(null);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to delete task");
+    },
+  });
+
   const handleStatusChange = (taskId: string, status: "PENDING" | "COMPLETED" | "CANCELED") => {
     updateStatusMutation.mutate({ taskId, status });
+  };
+
+  const handleEdit = (task: Task) => {
+    setSelectedTask(task);
+    setEditSheetOpen(true);
+  };
+
+  const handleDeleteClick = (task: Task) => {
+    setTaskToDelete(task);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (taskToDelete) {
+      deleteMutation.mutate(taskToDelete.id);
+    }
+  };
+
+  const handleEditSuccess = () => {
+    setEditSheetOpen(false);
+    setSelectedTask(null);
   };
 
   if (isLoading) {
@@ -147,7 +279,33 @@ export function TaskTable() {
                 Task
               </TableHead>
               <TableHead className="h-12 font-semibold text-sm text-foreground">
-                Status
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      className="h-auto p-0 font-semibold hover:bg-transparent hover:text-foreground data-[state=open]:bg-transparent"
+                    >
+                      Status
+                      <ChevronDown className="ml-1 h-4 w-4 opacity-50" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    <DropdownMenuLabel>Sort by Status</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => onSortChange("status-asc")}
+                      className={sortOption === "status-asc" ? "bg-accent" : ""}
+                    >
+                      PENDING → COMPLETED → CANCELED
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => onSortChange("status-desc")}
+                      className={sortOption === "status-desc" ? "bg-accent" : ""}
+                    >
+                      CANCELED → COMPLETED → PENDING
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </TableHead>
               <TableHead className="h-12 font-semibold text-sm text-foreground">
                 Created
@@ -171,6 +329,70 @@ export function TaskTable() {
     );
   }
 
+  if (filteredAndSortedTasks.length === 0) {
+    return (
+      <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/50 border-b border-border transition-colors">
+              <TableHead className="w-[50%] h-12 font-semibold text-sm text-foreground">
+                Task
+              </TableHead>
+              <TableHead className="h-12 font-semibold text-sm text-foreground">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      className="h-auto p-0 font-semibold hover:bg-transparent hover:text-foreground data-[state=open]:bg-transparent"
+                    >
+                      Status
+                      <ChevronDown className="ml-1 h-4 w-4 opacity-50" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    <DropdownMenuLabel>Sort by Status</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => onSortChange("status-asc")}
+                      className={sortOption === "status-asc" ? "bg-accent" : ""}
+                    >
+                      PENDING → COMPLETED → CANCELED
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => onSortChange("status-desc")}
+                      className={sortOption === "status-desc" ? "bg-accent" : ""}
+                    >
+                      CANCELED → COMPLETED → PENDING
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </TableHead>
+              <TableHead className="h-12 font-semibold text-sm text-foreground">
+                Created
+              </TableHead>
+              <TableHead className="text-right h-12 font-semibold text-sm text-foreground">
+                Actions
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow>
+              <TableCell colSpan={4} className="h-32">
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-sm text-muted-foreground">
+                    {searchQuery.trim()
+                      ? `No tasks found matching "${searchQuery}".`
+                      : "No tasks found. Create your first task to get started!"}
+                  </p>
+                </div>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
       <Table>
@@ -180,7 +402,33 @@ export function TaskTable() {
               Task
             </TableHead>
             <TableHead className="h-12 font-semibold text-sm text-foreground">
-              Status
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className="h-auto p-0 font-semibold hover:bg-transparent hover:text-foreground data-[state=open]:bg-transparent"
+                  >
+                    Status
+                    <ChevronDown className="ml-1 h-4 w-4 opacity-50" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuLabel>Sort by Status</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => onSortChange("status-asc")}
+                    className={sortOption === "status-asc" ? "bg-accent" : ""}
+                  >
+                    PENDING → COMPLETED → CANCELED
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => onSortChange("status-desc")}
+                    className={sortOption === "status-desc" ? "bg-accent" : ""}
+                  >
+                    CANCELED → COMPLETED → PENDING
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </TableHead>
             <TableHead className="h-12 font-semibold text-sm text-foreground">
               Created
@@ -191,7 +439,7 @@ export function TaskTable() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {tasks.map((task) => (
+          {filteredAndSortedTasks.map((task) => (
             <TableRow
               key={task.id}
               className="group transition-colors border-b border-border/50 last:border-b-0"
@@ -258,7 +506,18 @@ export function TaskTable() {
                       </DropdownMenuSubContent>
                     </DropdownMenuSub>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleEdit(task)}>
+                      <Pencil className="mr-2 h-4 w-4" />
+                      Edit
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="text-white bg-red-500 dark:bg-red-500 hover:bg-red-500/20 dark:hover:bg-red-500/30 focus:bg-red-500/80 dark:focus:bg-red-500/80"
+                      onClick={() => handleDeleteClick(task)}
+                      disabled={deleteMutation.isPending}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </TableCell>
@@ -266,6 +525,63 @@ export function TaskTable() {
           ))}
         </TableBody>
       </Table>
+
+      {/* Edit Sheet */}
+      <Sheet open={editSheetOpen} onOpenChange={setEditSheetOpen}>
+        <SheetContent
+          side="right"
+          className="w-full max-w-md sm:max-w-lg px-6 py-8 sm:px-8 sm:py-10"
+        >
+          <SheetHeader>
+            <SheetTitle>Edit Task</SheetTitle>
+            <SheetDescription>
+              Update the task details below.
+            </SheetDescription>
+          </SheetHeader>
+          {selectedTask && (
+            <TaskForm task={selectedTask} onSuccess={handleEditSuccess} />
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Task</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete &quot;{taskToDelete?.title}&quot;? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteDialogOpen(false);
+                setTaskToDelete(null);
+              }}
+              disabled={deleteMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteConfirm}
+              disabled={deleteMutation.isPending}
+              className="bg-red-500 text-white hover:bg-red-600 dark:bg-red-500 dark:text-white dark:hover:bg-red-600"
+            >
+              {deleteMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

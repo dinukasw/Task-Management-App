@@ -21,9 +21,17 @@ import {
 } from "@/components/ui/select";
 import { TaskForm } from "./task-form";
 
-export function TaskHeader() {
+interface TaskHeaderProps {
+    searchQuery: string;
+    onSearchChange: (query: string) => void;
+    sortOption: string;
+    onSortChange: (option: string) => void;
+    statusFilter: string;
+    onStatusFilterChange: (filter: string) => void;
+}
+
+export function TaskHeader({ searchQuery, onSearchChange, sortOption, onSortChange, statusFilter, onStatusFilterChange }: TaskHeaderProps) {
     const [isOpen, setIsOpen] = useState(false);
-    const [statusFilter, setStatusFilter] = useState<string>("all");
 
     return (
         <div className="flex flex-col gap-4">
@@ -60,19 +68,33 @@ export function TaskHeader() {
                 </div>
             </div>
 
-            {/* Bottom Layer: Search Bar and Status Filter */}
+            {/* Bottom Layer: Search Bar, Sort, and Status Filter */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-2">
                 <div className="relative flex-1 w-full sm:flex-initial">
                     <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
                         type="search"
                         placeholder="Search tasks..."
+                        value={searchQuery}
+                        onChange={(e) => onSearchChange(e.target.value)}
                         className="h-10 pl-10 pr-3 w-full sm:min-w-[280px] sm:max-w-sm"
                     />
                 </div>
 
                 <div className="w-full sm:w-[140px]">
-                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <Select value={sortOption} onValueChange={onSortChange}>
+                        <SelectTrigger className="w-full h-10 bg-background">
+                            <SelectValue placeholder="Sort by" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="date-newest">Newest First</SelectItem>
+                            <SelectItem value="date-oldest">Oldest First</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <div className="w-full sm:w-[140px]">
+                    <Select value={statusFilter} onValueChange={onStatusFilterChange}>
                         <SelectTrigger className="w-full h-10 bg-background">
                             <SelectValue placeholder="Filter by status" />
                         </SelectTrigger>
