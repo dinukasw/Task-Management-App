@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -25,6 +26,7 @@ import {
   CardHeader, 
   CardTitle 
 } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertIcon } from "@/components/ui/alert";
 
 import { loginSchema, type LoginInput } from "@/validators/auth.schema";
 import { useAuth } from "@/context/auth-context";
@@ -32,6 +34,7 @@ import { useAuth } from "@/context/auth-context";
 export function LoginForm() {
   const router = useRouter();
   const { login, isAuthenticating } = useAuth();
+  const [apiError, setApiError] = useState<string | null>(null);
 
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
@@ -41,7 +44,16 @@ export function LoginForm() {
     },
   });
 
+  // Clear error when user starts typing
+  const handleFieldChange = () => {
+    if (apiError) {
+      setApiError(null);
+    }
+  };
+
   async function onSubmit(values: LoginInput) {
+    setApiError(null); // Clear previous errors
+    
     const result = await login(values);
 
     if (result.success) {
@@ -53,8 +65,10 @@ export function LoginForm() {
       router.push("/");
       router.refresh();
     } else {
+      const errorMessage = result.error || "Please check your email and password.";
+      setApiError(errorMessage);
       toast.error("Authentication failed", {
-        description: result.error || "Please check your email and password.",
+        description: errorMessage,
       });
     }
   }
@@ -72,6 +86,12 @@ export function LoginForm() {
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            {apiError && (
+              <Alert variant="destructive">
+                <AlertIcon variant="destructive" />
+                <AlertDescription>{apiError}</AlertDescription>
+              </Alert>
+            )}
             <FormField
               control={form.control}
               name="email"
@@ -85,7 +105,11 @@ export function LoginForm() {
                         placeholder="name@example.com" 
              
                         className="pl-10 focus-visible:ring-primary" 
-                        {...field} 
+                        {...field}
+                        onChange={(e) => {
+                          field.onChange(e);
+                          handleFieldChange();
+                        }}
                         disabled={isAuthenticating}
                       />
                     </div>
@@ -110,7 +134,11 @@ export function LoginForm() {
                         placeholder="••••••••" 
                   
                         className="pl-10 focus-visible:ring-primary" 
-                        {...field} 
+                        {...field}
+                        onChange={(e) => {
+                          field.onChange(e);
+                          handleFieldChange();
+                        }}
                         disabled={isAuthenticating}
                       />
                     </div>

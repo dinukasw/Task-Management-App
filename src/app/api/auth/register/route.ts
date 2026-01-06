@@ -7,10 +7,48 @@ import { setAuthCookie } from "@/lib/cookies";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch (parseError) {
+      return NextResponse.json(
+        { success: false, error: "Invalid request format. Please check your input." },
+        { status: 400 }
+      );
+    }
     
     // Validate input
-    const validatedData = registerSchema.parse(body);
+    let validatedData;
+    try {
+      validatedData = registerSchema.parse(body);
+    } catch (validationError) {
+      if (validationError instanceof ZodError) {
+        // Provide more specific validation error messages
+        const firstError = validationError.errors[0];
+        if (firstError.path.includes("name")) {
+          return NextResponse.json(
+            { success: false, error: "Name must be at least 2 characters" },
+            { status: 400 }
+          );
+        }
+        if (firstError.path.includes("email")) {
+          return NextResponse.json(
+            { success: false, error: "Please enter a valid email address" },
+            { status: 400 }
+          );
+        }
+        if (firstError.path.includes("password")) {
+          return NextResponse.json(
+            { success: false, error: "Password must be at least 6 characters" },
+            { status: 400 }
+          );
+        }
+      }
+      return NextResponse.json(
+        { success: false, error: "Invalid input data. Please check all fields." },
+        { status: 400 }
+      );
+    }
 
     // Register user
     const user = await registerUser(validatedData);
@@ -34,14 +72,6 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    // Check if it's a validation error
-    if (error instanceof ZodError) {
-      return NextResponse.json(
-        { success: false, error: "Invalid input data" },
-        { status: 400 }
-      );
-    }
-
     if (error instanceof Error) {
       // Check if user already exists
       if (error.message === "User with this email already exists") {
@@ -51,14 +81,16 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      // Log unexpected errors for debugging (but don't expose details to client)
+      console.error("Registration error:", error);
       return NextResponse.json(
-        { success: false, error: error.message || "Registration failed" },
+        { success: false, error: "An unexpected error occurred. Please try again later." },
         { status: 500 }
       );
     }
 
     return NextResponse.json(
-      { success: false, error: "An unexpected error occurred" },
+      { success: false, error: "An unexpected error occurred. Please try again later." },
       { status: 500 }
     );
   }

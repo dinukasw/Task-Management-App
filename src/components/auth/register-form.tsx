@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -25,6 +26,7 @@ import {
   CardHeader, 
   CardTitle 
 } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertIcon } from "@/components/ui/alert";
 
 import { registerSchema, type RegisterInput } from "@/validators/auth.schema";
 import { useAuth } from "@/context/auth-context";
@@ -32,6 +34,7 @@ import { useAuth } from "@/context/auth-context";
 export function RegisterForm() {
   const router = useRouter();
   const { register, isAuthenticating } = useAuth();
+  const [apiError, setApiError] = useState<string | null>(null);
 
   // Initialize React Hook Form (RHF)
   const form = useForm<RegisterInput>({
@@ -43,7 +46,16 @@ export function RegisterForm() {
     },
   });
 
+  // Clear error when user starts typing
+  const handleFieldChange = () => {
+    if (apiError) {
+      setApiError(null);
+    }
+  };
+
   async function onSubmit(values: RegisterInput) {
+    setApiError(null); // Clear previous errors
+    
     const result = await register(values);
 
     if (result.success) {
@@ -55,8 +67,10 @@ export function RegisterForm() {
       router.push("/");
       router.refresh();
     } else {
+      const errorMessage = result.error || "Registration failed. Please try again.";
+      setApiError(errorMessage);
       toast.error("Registration failed", {
-        description: result.error || "Registration failed. Please try again.",
+        description: errorMessage,
       });
     }
   }
@@ -75,6 +89,12 @@ export function RegisterForm() {
         {/* The RHF Provider */}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            {apiError && (
+              <Alert variant="destructive">
+                <AlertIcon variant="destructive" />
+                <AlertDescription>{apiError}</AlertDescription>
+              </Alert>
+            )}
             {/* Name Field */}
             <FormField
               control={form.control}
@@ -85,7 +105,16 @@ export function RegisterForm() {
                   <FormControl>
                     <div className="relative">
        
-                      <Input placeholder="John Doe" className="pl-10" {...field} disabled={isAuthenticating} />
+                      <Input 
+                        placeholder="John Doe" 
+                        className="pl-10" 
+                        {...field}
+                        onChange={(e) => {
+                          field.onChange(e);
+                          handleFieldChange();
+                        }}
+                        disabled={isAuthenticating} 
+                      />
                     </div>
                   </FormControl>
                   <FormMessage />
@@ -102,7 +131,16 @@ export function RegisterForm() {
                   <FormControl>
                     <div className="relative">
              
-                      <Input placeholder="name@example.com" className="pl-10" {...field} disabled={isAuthenticating} />
+                      <Input 
+                        placeholder="name@example.com" 
+                        className="pl-10" 
+                        {...field}
+                        onChange={(e) => {
+                          field.onChange(e);
+                          handleFieldChange();
+                        }}
+                        disabled={isAuthenticating} 
+                      />
                     </div>
                   </FormControl>
                   <FormMessage />
@@ -119,7 +157,17 @@ export function RegisterForm() {
                   <FormControl>
                     <div className="relative">
       
-                      <Input type="password" placeholder="••••••••" className="pl-10" {...field} disabled={isAuthenticating} />
+                      <Input 
+                        type="password" 
+                        placeholder="••••••••" 
+                        className="pl-10" 
+                        {...field}
+                        onChange={(e) => {
+                          field.onChange(e);
+                          handleFieldChange();
+                        }}
+                        disabled={isAuthenticating} 
+                      />
                     </div>
                   </FormControl>
                   <FormMessage />

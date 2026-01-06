@@ -7,10 +7,42 @@ import { setAuthCookie } from "@/lib/cookies";
 
 export async function POST(request: NextRequest) {
     try {
-        const body = await request.json();
+        let body;
+        try {
+            body = await request.json();
+        } catch (parseError) {
+            return NextResponse.json(
+                { success: false, error: "Invalid request format. Please check your input." },
+                { status: 400 }
+            );
+        }
 
         // Validate input
-        const validatedData = loginSchema.parse(body);
+        let validatedData;
+        try {
+            validatedData = loginSchema.parse(body);
+        } catch (validationError) {
+            if (validationError instanceof ZodError) {
+                // Provide more specific validation error messages
+                const firstError = validationError.errors[0];
+                if (firstError.path.includes("email")) {
+                    return NextResponse.json(
+                        { success: false, error: "Please enter a valid email address" },
+                        { status: 400 }
+                    );
+                }
+                if (firstError.path.includes("password")) {
+                    return NextResponse.json(
+                        { success: false, error: "Password must be at least 6 characters" },
+                        { status: 400 }
+                    );
+                }
+            }
+            return NextResponse.json(
+                { success: false, error: "Invalid email or password" },
+                { status: 400 }
+            );
+        }
 
         // Login user
         const user = await loginUser(
@@ -34,14 +66,6 @@ export async function POST(request: NextRequest) {
             },
         });
     } catch (error) {
-        // Check if it's a validation error
-        if (error instanceof ZodError) {
-            return NextResponse.json(
-                { success: false, error: "Invalid email or password" },
-                { status: 400 }
-            );
-        }
-
         if (error instanceof Error) {
             // Check if credentials are invalid
             if (error.message === "Invalid email or password") {
@@ -51,14 +75,16 @@ export async function POST(request: NextRequest) {
                 );
             }
 
+            // Log unexpected errors for debugging (but don't expose details to client)
+            console.error("Login error:", error);
             return NextResponse.json(
-                { success: false, error: error.message || "Login failed" },
+                { success: false, error: "An unexpected error occurred. Please try again later." },
                 { status: 500 }
             );
         }
 
         return NextResponse.json(
-            { success: false, error: "An unexpected error occurred" },
+            { success: false, error: "An unexpected error occurred. Please try again later." },
             { status: 500 }
         );
     }
