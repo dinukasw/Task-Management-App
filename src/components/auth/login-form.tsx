@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Mail, Lock } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -31,9 +30,8 @@ import { loginSchema, type LoginInput } from "@/validators/auth.schema";
 import { useAuth } from "@/context/auth-context";
 
 export function LoginForm() {
-  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, isAuthenticating } = useAuth();
 
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
@@ -44,26 +42,9 @@ export function LoginForm() {
   });
 
   async function onSubmit(values: LoginInput) {
-    setIsLoading(true);
-    
-    try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(values),
-      });
+    const result = await login(values);
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || "Login failed");
-      }
-
-      // Update auth context
-      login(data.user);
-
+    if (result.success) {
       toast.success("Login successful!", {
         description: "Redirecting you to your dashboard...",
       });
@@ -71,17 +52,10 @@ export function LoginForm() {
       // Redirect to dashboard
       router.push("/");
       router.refresh();
-      
-    } catch (error) {
-      const errorMessage = error instanceof Error 
-        ? error.message 
-        : "Please check your email and password.";
-      
+    } else {
       toast.error("Authentication failed", {
-        description: errorMessage,
+        description: result.error || "Please check your email and password.",
       });
-    } finally {
-      setIsLoading(false);
     }
   }
 
@@ -112,7 +86,7 @@ export function LoginForm() {
              
                         className="pl-10 focus-visible:ring-primary" 
                         {...field} 
-                        disabled={isLoading}
+                        disabled={isAuthenticating}
                       />
                     </div>
                   </FormControl>
@@ -137,7 +111,7 @@ export function LoginForm() {
                   
                         className="pl-10 focus-visible:ring-primary" 
                         {...field} 
-                        disabled={isLoading}
+                        disabled={isAuthenticating}
                       />
                     </div>
                   </FormControl>
@@ -148,9 +122,9 @@ export function LoginForm() {
             <Button 
               type="submit" 
               className="w-full font-semibold transition-transform active:scale-95" 
-              disabled={isLoading}
+              disabled={isAuthenticating}
             >
-              {isLoading ? (
+              {isAuthenticating ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Authenticating...

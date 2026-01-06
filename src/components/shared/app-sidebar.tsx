@@ -21,6 +21,8 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/context/auth-context";
+import { toast } from "sonner";
 
 const menuItems = [
   { title: "Overview", url: "/", icon: LayoutDashboard }, 
@@ -29,6 +31,12 @@ const menuItems = [
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const { logout } = useAuth();
+
+  const handleLogout = async () => {
+    await logout();
+    toast.success("Logged out successfully");
+  };
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border bg-card">
@@ -96,7 +104,8 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton 
               tooltip="Logout" 
-              className="h-10 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+              className="h-10 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+              onClick={handleLogout}
             >
               <LogOut className="size-5" />
               <span>Logout</span>

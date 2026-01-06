@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Mail, Lock, User } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -31,9 +30,8 @@ import { registerSchema, type RegisterInput } from "@/validators/auth.schema";
 import { useAuth } from "@/context/auth-context";
 
 export function RegisterForm() {
-  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const { login } = useAuth();
+  const { register, isAuthenticating } = useAuth();
 
   // Initialize React Hook Form (RHF)
   const form = useForm<RegisterInput>({
@@ -46,25 +44,9 @@ export function RegisterForm() {
   });
 
   async function onSubmit(values: RegisterInput) {
-    setIsLoading(true);
-    try {
-      const response = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(values),
-      });
+    const result = await register(values);
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || "Registration failed");
-      }
-
-      // Update auth context
-      login(data.user);
-
+    if (result.success) {
       toast.success("Account created successfully!", {
         description: "Redirecting you to your dashboard...",
       });
@@ -72,16 +54,10 @@ export function RegisterForm() {
       // Redirect to dashboard
       router.push("/");
       router.refresh();
-    } catch (error) {
-      const errorMessage = error instanceof Error 
-        ? error.message 
-        : "Registration failed. Please try again.";
-      
+    } else {
       toast.error("Registration failed", {
-        description: errorMessage,
+        description: result.error || "Registration failed. Please try again.",
       });
-    } finally {
-      setIsLoading(false);
     }
   }
 
@@ -109,7 +85,7 @@ export function RegisterForm() {
                   <FormControl>
                     <div className="relative">
        
-                      <Input placeholder="John Doe" className="pl-10" {...field} disabled={isLoading} />
+                      <Input placeholder="John Doe" className="pl-10" {...field} disabled={isAuthenticating} />
                     </div>
                   </FormControl>
                   <FormMessage />
@@ -126,7 +102,7 @@ export function RegisterForm() {
                   <FormControl>
                     <div className="relative">
              
-                      <Input placeholder="name@example.com" className="pl-10" {...field} disabled={isLoading} />
+                      <Input placeholder="name@example.com" className="pl-10" {...field} disabled={isAuthenticating} />
                     </div>
                   </FormControl>
                   <FormMessage />
@@ -143,15 +119,15 @@ export function RegisterForm() {
                   <FormControl>
                     <div className="relative">
       
-                      <Input type="password" placeholder="••••••••" className="pl-10" {...field} disabled={isLoading} />
+                      <Input type="password" placeholder="••••••••" className="pl-10" {...field} disabled={isAuthenticating} />
                     </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <Button type="submit" className="w-full font-semibold" disabled={isLoading}>
-              {isLoading ? (
+            <Button type="submit" className="w-full font-semibold" disabled={isAuthenticating}>
+              {isAuthenticating ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Creating account...
