@@ -94,11 +94,21 @@ export function AppSidebar() {
         <SidebarMenu className="gap-1">
           <SidebarMenuItem>
             <SidebarMenuButton 
+              asChild
               tooltip="Settings"
-              className="h-10 hover:bg-accent hover:text-accent-foreground transition-colors"
+              className={cn(
+                "h-10 transition-all duration-200 ease-in-out",
+                "hover:bg-accent hover:text-accent-foreground",
+                pathname === "/settings" && "bg-primary/10 text-primary font-medium hover:bg-primary/15 hover:text-primary"
+              )}
             >
-              <Settings className="size-5 text-muted-foreground" />
-              <span>Settings</span>
+              <Link href="/settings" className="flex items-center gap-3">
+                <Settings className={cn(
+                  "size-5 shrink-0 transition-colors",
+                  pathname === "/settings" ? "text-primary" : "text-muted-foreground"
+                )} />
+                <span className="group-data-[collapsible=icon]:hidden">Settings</span>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
