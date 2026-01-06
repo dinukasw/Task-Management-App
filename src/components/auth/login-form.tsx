@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Mail, Lock } from "lucide-react";
@@ -27,9 +28,12 @@ import {
 } from "@/components/ui/card";
 
 import { loginSchema, type LoginInput } from "@/validators/auth.schema";
+import { useAuth } from "@/context/auth-context";
 
 export function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
+  const { login } = useAuth();
 
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
@@ -43,19 +47,38 @@ export function LoginForm() {
     setIsLoading(true);
     
     try {
-      // Logic for actual API call will go here
-      console.log("Submiting to API:", values);
-      
-      // Artificial delay for UX
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(values),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Login failed");
+      }
+
+      // Update auth context
+      login(data.user);
+
       toast.success("Login successful!", {
         description: "Redirecting you to your dashboard...",
       });
+
+      // Redirect to dashboard
+      router.push("/");
+      router.refresh();
       
     } catch (error) {
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : "Please check your email and password.";
+      
       toast.error("Authentication failed", {
-        description: "Please check your email and password.",
+        description: errorMessage,
       });
     } finally {
       setIsLoading(false);

@@ -1,14 +1,13 @@
 "use client";
 
-import { createContext, useEffect, useState } from "react";
-import { User } from "@/types"
-
+import { createContext, useEffect, useState, useContext } from "react";
+import { User } from "@/types";
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   login: (userData: User) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -20,7 +19,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        // Logic for checking session will go here
+        const response = await fetch("/api/auth/me");
+        const data = await response.json();
+        
+        if (data.success && data.user) {
+          setUser(data.user);
+        } else {
+          setUser(null);
+        }
+      } catch (error) {
+        console.error("Failed to check auth:", error);
+        setUser(null);
       } finally {
         setIsLoading(false);
       }
@@ -28,13 +37,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     checkAuth();
   }, []);
 
-  const login = (userData: User) => setUser(userData);
-  const logout = () => setUser(null);
+  const login = (userData: User) => {
+    setUser(userData);
+  };
+
+  const logout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch (error) {
+      console.error("Failed to logout:", error);
+    } finally {
+      setUser(null);
+    }
+  };
 
   return (
     <AuthContext.Provider value={{ user, isLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
 }
 

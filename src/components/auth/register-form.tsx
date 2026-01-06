@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Mail, Lock, User } from "lucide-react";
@@ -27,9 +28,12 @@ import {
 } from "@/components/ui/card";
 
 import { registerSchema, type RegisterInput } from "@/validators/auth.schema";
+import { useAuth } from "@/context/auth-context";
 
 export function RegisterForm() {
   const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
+  const { login } = useAuth();
 
   // Initialize React Hook Form (RHF)
   const form = useForm<RegisterInput>({
@@ -44,12 +48,38 @@ export function RegisterForm() {
   async function onSubmit(values: RegisterInput) {
     setIsLoading(true);
     try {
-      console.log("Registering User:", values);
-      // API call will be implemented here later
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      toast.success("Account created successfully!");
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(values),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Registration failed");
+      }
+
+      // Update auth context
+      login(data.user);
+
+      toast.success("Account created successfully!", {
+        description: "Redirecting you to your dashboard...",
+      });
+
+      // Redirect to dashboard
+      router.push("/");
+      router.refresh();
     } catch (error) {
-      toast.error("Registration failed. Please try again.");
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : "Registration failed. Please try again.";
+      
+      toast.error("Registration failed", {
+        description: errorMessage,
+      });
     } finally {
       setIsLoading(false);
     }
