@@ -20,6 +20,9 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
 
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -55,6 +58,9 @@
   --accent: oklch(0.92 0.04 255); /* Light Blue Tint */
   --accent-foreground: var(--primary);
 
+  --popover: oklch(1 0 0); /* White - matches background */
+  --popover-foreground: oklch(0.12 0.02 252); /* Near Black Blue-Tint - matches foreground */
+
   --border: oklch(0.89 0.01 252);
   --input: oklch(0.89 0.01 252);
   --ring: var(--primary);
@@ -83,6 +89,9 @@
 
   --accent: oklch(0.25 0.05 255); /* Deep Blue Gray */
   --accent-foreground: oklch(0.98 0.01 255);
+
+  --popover: oklch(0.12 0.01 252); /* Very Deep Navy/Black - matches background */
+  --popover-foreground: oklch(0.98 0.01 255); /* White - matches foreground */
 
   --border: oklch(0.22 0.02 252);
   --input: oklch(0.22 0.02 252);
